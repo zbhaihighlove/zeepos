@@ -24,6 +24,8 @@ jobs:
 
       - name: Build Vite + Electron
         run: npm run build && npx electron-builder --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Windows installer
         uses: actions/upload-artifact@v4
