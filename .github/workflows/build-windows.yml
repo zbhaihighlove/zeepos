@@ -24,6 +24,8 @@ jobs:
 
       - name: Build Vite + Electron
         run: npm run dist
+        env:
+          ELECTRON_BUILDER_PUBLISH: never
 
       - name: Upload Windows installer
         uses: actions/upload-artifact@v4
