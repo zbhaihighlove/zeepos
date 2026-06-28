@@ -166,7 +166,8 @@ export default function POS({ goBack, editingOrder }) {
         price: Number(item.price) || 0,
         qty: Number(item.qty) || 1,
         unit: product?.unit || "",
-        stock: product?.stock || 0, // ✅ always correct stock
+        stock: product?.stock || 0,
+        description: product?.description || "",
         itemDiscountPercent: Number(item.discount_percent) || 0,
         itemDiscountFixed: Number(item.discount_fixed) || 0
       };
@@ -488,6 +489,7 @@ const user = JSON.parse(localStorage.getItem("user") || "{}");
               <span>${i.name}</span>
               <span>${total.toFixed(2)}</span>
             </div>
+            ${i.description ? `<div class="small" style="color:#555;margin-bottom:2px">${i.description}</div>` : ""}
             <div class="row small">
               <span>${i.qty} x ${i.price}</span>
               <span>${i.itemDiscountPercent || 0}% + ${i.itemDiscountFixed || 0}</span>
@@ -571,26 +573,50 @@ const user = JSON.parse(localStorage.getItem("user") || "{}");
   </div>
 )}
 
-{/* 🔥 VISUAL PRODUCTS (TOP) */}
+{/* 🔥 VISUAL PRODUCTS (TOP) - grouped by category */}
 <div style={styles.visualSection}>
-  <div style={styles.productGrid}>
-    {products.map(p => (
-      <div
-        key={p.sku}
-        style={styles.productCard}
-        onClick={() => addToCart(p)}
-      >
-        <img
-          src={p.image || "https://via.placeholder.com/100"}
-          style={styles.productImage}
-        />
-        <div style={styles.productName}>{p.name}</div>
-        <div style={styles.productPrice}>
-          {p.price} {p.unit ? `/ ${p.unit}` : ""}
+  {(() => {
+    // group products by category_name, uncategorized goes last
+    const grouped = {};
+    const uncategorized = [];
+
+    for (const p of products) {
+      const cat = p.category_name?.trim();
+      if (cat) {
+        if (!grouped[cat]) grouped[cat] = [];
+        grouped[cat].push(p);
+      } else {
+        uncategorized.push(p);
+      }
+    }
+
+    const entries = Object.entries(grouped);
+    if (uncategorized.length > 0) entries.push(["Uncategorized", uncategorized]);
+
+    return entries.map(([catName, items]) => (
+      <div key={catName} style={styles.categorySection}>
+        <div style={styles.categoryHeader}>{catName}</div>
+        <div style={styles.categoryRow}>
+          {items.map(p => (
+            <div
+              key={p.sku}
+              style={styles.productCard}
+              onClick={() => addToCart(p)}
+            >
+              <img
+                src={p.image || "https://via.placeholder.com/100"}
+                style={styles.productImage}
+              />
+              <div style={styles.productName}>{p.name}</div>
+              <div style={styles.productPrice}>
+                {p.price} {p.unit ? `/ ${p.unit}` : ""}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
-    ))}
-  </div>
+    ));
+  })()}
 </div>
 
 {/* 🔥 ORIGINAL POS (BOTTOM - UNCHANGED) */}
@@ -664,6 +690,9 @@ const user = JSON.parse(localStorage.getItem("user") || "{}");
           <div style={{ fontWeight: "500" }}>{item.name}</div>
           <div style={{ fontSize: 12, color: "#888" }}>{item.sku}</div>
           <div style={{ fontSize: 12, color: "#888" }}>{item.product_bar_code}</div>
+          {item.description ? (
+            <div style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}>{item.description}</div>
+          ) : null}
         </div>
 
         <div style={styles.colQty}>
@@ -1026,36 +1055,54 @@ const styles = {
     fontSize: 11
   },
   visualSection: {
-    height: "35%",
+    height: "40%",
     background: "#fff",
     borderRadius: 10,
-    padding: 10,
-    overflow: "hidden",
+    padding: "10px 14px",
+    overflowY: "auto",
     boxShadow: "0 2px 6px rgba(0,0,0,0.05)"
   },
-  
+
+  categorySection: {
+    marginBottom: 14
+  },
+
+  categoryHeader: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#444",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    marginBottom: 8,
+    paddingBottom: 4,
+    borderBottom: "2px solid #e8edf3"
+  },
+
+  categoryRow: {
+    display: "flex",
+    flexDirection: "row",
+    gap: 10,
+    overflowX: "auto",
+    paddingBottom: 4
+  },
+
   tableSection: {
-    height: "65%",
+    height: "60%",
     display: "flex",
     flexDirection: "column",
     gap: 10
   },
   
-  productGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(110px,1fr))",
-    gap: 10,
-    overflowY: "auto",
-    height: "100%"
-  },
-  
   productCard: {
+    minWidth: 110,
+    maxWidth: 110,
     background: "#fafafa",
     borderRadius: 10,
     padding: 8,
     cursor: "pointer",
     textAlign: "center",
-    border: "1px solid #eee"
+    border: "1px solid #eee",
+    flexShrink: 0
   },
   
   productImage: {

@@ -89,15 +89,15 @@ ipcMain.handle("sync-products", async (event, data) => {
       console.log("🌐 API PRODUCTS:", products.length);
   
       const insert = db.prepare(`
-        INSERT INTO products 
-        (sku, name, price, stock, image, unit, discount_percent, discount_fixed, product_bar_code)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO products
+        (sku, name, price, stock, image, unit, discount_percent, discount_fixed, product_bar_code, category_id, category_name, description)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
-  
+
       const transaction = db.transaction((products) => {
         // 🔥 DELETE OLD DATA
         db.prepare("DELETE FROM products").run();
-  
+
         // 🔥 INSERT NEW DATA
         for (const p of products) {
           insert.run(
@@ -109,7 +109,10 @@ ipcMain.handle("sync-products", async (event, data) => {
             p.unit,
             p.discount_percent,
             p.discount_fixed,
-            p.product_bar_code
+            p.product_bar_code,
+            p.category_id || 0,
+            p.category_name || "",
+            p.description || ""
           );
         }
       });

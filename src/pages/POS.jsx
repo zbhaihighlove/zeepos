@@ -166,7 +166,8 @@ export default function POS({ goBack, editingOrder }) {
         price: Number(item.price) || 0,
         qty: Number(item.qty) || 1,
         unit: product?.unit || "",
-        stock: product?.stock || 0, // ✅ always correct stock
+        stock: product?.stock || 0,
+        description: product?.description || "",
         itemDiscountPercent: Number(item.discount_percent) || 0,
         itemDiscountFixed: Number(item.discount_fixed) || 0
       };
@@ -752,6 +753,7 @@ const user = JSON.parse(localStorage.getItem("user") || "{}");
               <span>${i.name}</span>
               <span>${total.toFixed(2)}</span>
             </div>
+            ${i.description ? `<div class="small" style="color:#555;margin-bottom:2px">${i.description}</div>` : ""}
             <div class="row small">
               <span>${i.qty} x ${i.price}</span>
               <span>${i.itemDiscountPercent || 0}% + ${i.itemDiscountFixed || 0}</span>
@@ -916,8 +918,9 @@ const user = JSON.parse(localStorage.getItem("user") || "{}");
   <div style={{ fontWeight: "500" }}>{item.name}</div>
   <div style={{ fontSize: 12, color: "#888" }}>{item.sku}</div>
   <div style={{ fontSize: 12, color: "#888" }}>{item.product_bar_code}</div>
-
-  
+  {item.description ? (
+    <div style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}>{item.description}</div>
+  ) : null}
 </div>
 
 <div style={styles.colQty}>

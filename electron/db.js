@@ -38,6 +38,18 @@ try {
   db.prepare(`ALTER TABLE products ADD COLUMN product_bar_code INTEGER`).run();
 } catch (e) {}
 
+try {
+  db.prepare(`ALTER TABLE products ADD COLUMN category_id INTEGER DEFAULT 0`).run();
+} catch (e) {}
+
+try {
+  db.prepare(`ALTER TABLE products ADD COLUMN category_name TEXT`).run();
+} catch (e) {}
+
+try {
+  db.prepare(`ALTER TABLE products ADD COLUMN description TEXT`).run();
+} catch (e) {}
+
 db.prepare(`CREATE INDEX IF NOT EXISTS idx_products_name ON products(name)`).run();
 db.prepare(`CREATE INDEX IF NOT EXISTS idx_products_sku ON products(sku)`).run();
 
