@@ -3,6 +3,9 @@ import Login from "./pages/Login";
 import POS from "./pages/POS";
 import Dashboard from "./pages/Dashboard";
 import Orders from "./pages/Orders";
+import Customers from "./pages/Customers";
+import SalesReport from "./pages/SalesReport";
+import ProfitLoss from "./pages/ProfitLoss";
 
 import POSVisual from "./pages/POSVisual";
 function App() {
@@ -53,6 +56,9 @@ function App() {
         goToPOSVisual={() => navigate("posvisual")}
         
         goToOrders={() => navigate("orders")}
+        goToCustomers={() => navigate("customers")}
+        goToSalesReport={() => navigate("salesreport")}
+        goToProfitLoss={() => navigate("profitloss")}
         onLogout={() => setScreen("login")}
       />
     );
@@ -88,6 +94,21 @@ function App() {
   goToPOSVisual={(order) => navigate("posvisual", order)} // ✅ ADD
 />
     );
+  }
+
+  // 👥 CUSTOMERS & CREDITS
+  if (screen === "customers") {
+    return <Customers goBack={() => navigate("dashboard")} />;
+  }
+
+  // 📊 SALES REPORT
+  if (screen === "salesreport") {
+    return <SalesReport goBack={() => navigate("dashboard")} />;
+  }
+
+  // 📉 PROFIT & LOSS
+  if (screen === "profitloss") {
+    return <ProfitLoss goBack={() => navigate("dashboard")} />;
   }
 
   return <div>Loading...</div>;

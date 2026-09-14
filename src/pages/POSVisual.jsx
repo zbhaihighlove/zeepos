@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef} from "react";
+import { colors } from "../theme";
 
 export default function POS({ goBack, editingOrder }) {
 
@@ -281,37 +282,40 @@ export default function POS({ goBack, editingOrder }) {
   async function submitOrder() {
     if (cart.length === 0) return alert("Cart is empty");
 
-    // ✅ NEW VALIDATION
-    if (received <= 0) {
-      return alert("Please enter received amount");
+    if (received < 0) {
+      return alert("Received amount cannot be negative");
     }
 
-    // ✅ Optional (better): prevent underpayment
-    if (received < netTotal) {
-      return alert("Received amount is less than total bill");
+    // 🔥 CREDIT: underpayment (including a full 0-paid credit sale) is allowed,
+    // but requires a customer name + phone to track it
+    if (received < netTotal && (!customer.name.trim() || !customer.phone.trim())) {
+      return alert("Customer name and phone are required for partial/credit payment");
     }
 
     const storeId = localStorage.getItem("store_id");
 const user = JSON.parse(localStorage.getItem("user") || "{}");
-  
+
     const order = {
       items: cart,
       total: netTotal,
       tax: taxAmount,
       discount: discountFixed,
-  
+
       discountPercent,
       taxPercent,
       received,
       change,
-  
+
       customer,
       store_id: storeId,   // ✅
   user_id: user.id     // ✅ ADD THIS
     };
-  
-    await window.electron.invoke("save-order", order);
-  
+
+    const result = await window.electron.invoke("save-order", order);
+    if (result && result.success === false) {
+      return alert(result.message || "Failed to save order");
+    }
+
     await loadProducts(); // ✅ refresh stock
     const html = generateBillHTML(order, user);
     await window.electron.invoke("print-bill", html);
@@ -328,9 +332,14 @@ const user = JSON.parse(localStorage.getItem("user") || "{}");
   async function saveOrder() {
     if (cart.length === 0) return alert("Cart is empty");
 
+    // 🔥 CREDIT: underpayment is allowed, but requires a customer name + phone to track it
+    if (received < netTotal && (!customer.name.trim() || !customer.phone.trim())) {
+      return alert("Customer name and phone are required for partial/credit payment");
+    }
+
     const storeId = localStorage.getItem("store_id");
 const user = JSON.parse(localStorage.getItem("user") || "{}");
-  
+
     const order = {
       id: editingOrder.id,
       items: cart,
@@ -349,7 +358,10 @@ const user = JSON.parse(localStorage.getItem("user") || "{}");
     };
   
     // 🔥 update order (same as submit)
-    await window.electron.invoke("update-order-full", order);
+    const result = await window.electron.invoke("update-order-full", order);
+    if (result && result.success === false) {
+      return alert(result.message || "Failed to update order");
+    }
 
     await loadProducts(); // ✅ refresh stock
   
@@ -401,9 +413,15 @@ const user = JSON.parse(localStorage.getItem("user") || "{}");
 //   AUTO BACKGROUND SYNC
   useEffect(() => {
     const interval = setInterval(() => {
-      window.electron.invoke("sync-orders");
+      const storeId = localStorage.getItem("store_id");
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+
+      window.electron.invoke("sync-orders", { user_id: user.id });
+      window.electron.invoke("sync-customers", { store_id: storeId, user_id: user.id });
+      window.electron.invoke("sync-returns", { store_id: storeId, user_id: user.id });
+      window.electron.invoke("sync-expenses", { user_id: user.id });
     }, 10000); // every 10 sec
-  
+
     return () => clearInterval(interval);
   }, []);
 
@@ -475,9 +493,25 @@ const user = JSON.parse(localStorage.getItem("user") || "{}");
           <h3>${user?.name}</h3>
           <div class="small">${new Date().toLocaleString()}</div>
         </div>
-  
+
         <div class="line"></div>
-  
+
+        ${(order.customer?.name || order.customer?.phone) ? `
+        <!-- CUSTOMER -->
+        <div class="row small">
+          <span>Customer</span>
+          <span>${order.customer?.name || "-"}</span>
+        </div>
+        ${order.customer?.phone ? `
+        <div class="row small">
+          <span>Phone</span>
+          <span>${order.customer.phone}</span>
+        </div>
+        ` : ""}
+
+        <div class="line"></div>
+        ` : ""}
+
         <!-- ITEMS -->
         ${order.items.map(i => {
           const base = i.price * i.qty;
@@ -538,16 +572,27 @@ const user = JSON.parse(localStorage.getItem("user") || "{}");
           <span>Change</span>
           <span>${order.change?.toFixed(2) || 0}</span>
         </div>
-  
+
+        ${order.received < order.total ? `
+        <div class="row" style="color:#c0392b;font-weight:bold;">
+          <span>Balance Due</span>
+          <span>${(order.total - order.received).toFixed(2)}</span>
+        </div>
+        ` : ""}
+
         <div class="line"></div>
-  
+
         <!-- FOOTER -->
         <div class="center small">
           <p>📞 ${user?.phone_1}</p>
           <p>${user?.tag_line}</p>
           <p>Visit again 😊</p>
         </div>
-  
+
+        <div class="center" style="font-size:6px;color:#555;margin-top:4px;">
+          Developed by MZEE Technologies - 03460364457
+        </div>
+
       </body>
     </html>
     `;
@@ -563,7 +608,7 @@ const user = JSON.parse(localStorage.getItem("user") || "{}");
 
 {editingOrder && (
   <div style={{
-    background: "#ff9800",
+    background: colors.warning,
     color: "#fff",
     padding: 10,
     textAlign: "center",
@@ -664,7 +709,7 @@ const user = JSON.parse(localStorage.getItem("user") || "{}");
       }
     />
 
-    <div style={{ fontSize: 14, color: "#555", padding: "10px" }}>
+    <div style={{ fontSize: 14, color: colors.muted, padding: "10px" }}>
       {currentTime.toLocaleString()}
     </div>
   </div>
@@ -807,6 +852,11 @@ const user = JSON.parse(localStorage.getItem("user") || "{}");
 />
 
           <div style={styles.summaryRow}><span>Change</span><span>{change > 0 ? change.toFixed(2) : 0}</span></div>
+          {received < netTotal && (
+            <div style={{ ...styles.summaryRow, color: colors.danger, fontWeight: "bold" }}>
+              <span>Due (Credit)</span><span>{(netTotal - received).toFixed(2)}</span>
+            </div>
+          )}
         </div>
 
         <button
@@ -836,8 +886,8 @@ const styles = {
   container: {
     display: "flex",
     height: "100vh",
-    fontFamily: "Inter, system-ui, Arial",
-    background: "#eef2f7"
+    fontFamily: "inherit",
+    background: colors.background
   },
 
   left: {
@@ -851,7 +901,7 @@ const styles = {
   right: {
     flex: 1,
     padding: 20,
-    background: "linear-gradient(180deg, #1e1e2f, #2c2c44)",
+    background: colors.gradient,
     color: "#fff",
     display: "flex",
     flexDirection: "column",
@@ -861,71 +911,58 @@ const styles = {
   },
 
   /* TOP BAR */
-  topBar: {
-    display: "flex",
-    gap: 10
-  },
-
   back: {
-    background: "#333",
+    background: colors.black,
     color: "#fff",
     border: "none",
     padding: "10px 15px",
     borderRadius: 8,
-    cursor: "pointer"
-  },
-
-  scan: {
-    flex: 1,
-    padding: 14,
-    borderRadius: 10,
-    border: "1px solid #ddd",
-    fontSize: 16,
-    outline: "none"
+    cursor: "pointer",
+    fontWeight: 600
   },
 
   /* CUSTOMER */
   customer: {
     display: "flex",
     gap: 10,
-    background: "#fff",
+    background: colors.surface,
     padding: 12,
     borderRadius: 10,
-    boxShadow: "0 2px 6px rgba(0,0,0,0.05)"
+    boxShadow: colors.cardShadow
   },
 
   customer_input: {
     flex: 1,
     padding: 12,
     borderRadius: 8,
-    border: "1px solid #ddd",
+    border: `1px solid ${colors.border}`,
     outline: "none"
   },
 
   /* TABLE */
   tableHeader: {
     display: "flex",
-    background: "#f1f3f6",
+    background: colors.primarySoft,
     padding: 12,
     fontWeight: "600",
     borderRadius: 10,
-    color: "#555",
+    color: colors.primaryDark,
     fontSize: 14
   },
 
   cart: {
     flex: 1,
     overflowY: "auto",
-    background: "#fff",
+    background: colors.surface,
     borderRadius: 10,
-    boxShadow: "0 2px 6px rgba(0,0,0,0.05)"
+    boxShadow: colors.cardShadow
   },
 
   row: {
     display: "flex",
     alignItems: "center",
     padding: 12,
-    borderBottom: "1px solid #f0f0f0",
+    borderBottom: `1px solid ${colors.border}`,
     transition: "0.2s"
   },
 
@@ -934,14 +971,14 @@ const styles = {
     width: 60,
     padding: 6,
     borderRadius: 6,
-    border: "1px solid #ddd",
+    border: `1px solid ${colors.border}`,
     textAlign: "center"
   },
 
   /* COLUMNS */
   colItem: { flex: 3 },
   colQty: { width: 70 },
-  colStock: { width: 70, textAlign: "center", color: "#777" },
+  colStock: { width: 70, textAlign: "center", color: colors.muted },
   colRate: { width: 80, textAlign: "center" },
   colPercent: { width: 70 },
   colDisc: { width: 80 },
@@ -949,13 +986,13 @@ const styles = {
     width: 100,
     textAlign: "right",
     fontWeight: "bold",
-    color: "#2c7be5"
+    color: colors.primary
   },
   colAction: { width: 50, textAlign: "center" },
 
   /* BUTTONS */
   removeBtn: {
-    background: "#ff4d4f",
+    background: colors.danger,
     color: "#fff",
     border: "none",
     padding: "6px 10px",
@@ -967,7 +1004,7 @@ const styles = {
     marginTop: 20,
     width: "100%",
     padding: 16,
-    background: "linear-gradient(135deg, #2ecc71, #27ae60)",
+    background: `linear-gradient(135deg, ${colors.primaryLight}, ${colors.primaryDark})`,
     color: "#fff",
     border: "none",
     fontSize: 16,
@@ -996,7 +1033,7 @@ const styles = {
   netBox: {
     marginTop: 20,
     padding: 20,
-    background: "linear-gradient(135deg, #00c6ff, #0072ff)",
+    background: `linear-gradient(135deg, ${colors.primary}, ${colors.primaryDark})`,
     borderRadius: 12,
     textAlign: "center",
     fontWeight: "bold"
@@ -1021,34 +1058,35 @@ const styles = {
     gap: 10,
     alignItems: "flex-start" // 🔥 FIX alignment
   },
-  
+
   scanWrap: {
     flex: 1,
     display: "flex",
     flexDirection: "column",
   },
-  
+
   scan: {
     width: "100%",
     padding: 14,
     borderRadius: 10,
-    border: "1px solid #ddd",
+    border: `1px solid ${colors.border}`,
     fontSize: 16,
     outline: "none",
     boxSizing: "border-box"
   },
-  
+
   shortcutsWrap: {
     display: "flex",
     gap: 10,
     flexWrap: "wrap",
     marginTop: 6,
     fontSize: 12,
-    color: "#666"
+    color: colors.muted
   },
-  
+
   key: {
-    background: "#eee",
+    background: colors.primarySoft,
+    color: colors.primaryDark,
     borderRadius: 6,
     padding: "2px 6px",
     fontWeight: "bold",
@@ -1056,11 +1094,11 @@ const styles = {
   },
   visualSection: {
     height: "40%",
-    background: "#fff",
+    background: colors.surface,
     borderRadius: 10,
     padding: "10px 14px",
     overflowY: "auto",
-    boxShadow: "0 2px 6px rgba(0,0,0,0.05)"
+    boxShadow: colors.cardShadow
   },
 
   categorySection: {
@@ -1070,12 +1108,12 @@ const styles = {
   categoryHeader: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#444",
+    color: colors.primaryDark,
     textTransform: "uppercase",
     letterSpacing: "0.05em",
     marginBottom: 8,
     paddingBottom: 4,
-    borderBottom: "2px solid #e8edf3"
+    borderBottom: `2px solid ${colors.primarySoft}`
   },
 
   categoryRow: {
@@ -1092,34 +1130,34 @@ const styles = {
     flexDirection: "column",
     gap: 10
   },
-  
+
   productCard: {
     minWidth: 110,
     maxWidth: 110,
-    background: "#fafafa",
+    background: colors.surface,
     borderRadius: 10,
     padding: 8,
     cursor: "pointer",
     textAlign: "center",
-    border: "1px solid #eee",
+    border: `1px solid ${colors.border}`,
     flexShrink: 0
   },
-  
+
   productImage: {
     width: "100%",
     height: 70,
     objectFit: "cover",
     borderRadius: 6
   },
-  
+
   productName: {
     fontSize: 12,
     marginTop: 5
   },
-  
+
   productPrice: {
     fontSize: 12,
-    color: "#2c7be5",
+    color: colors.primary,
     fontWeight: "bold"
   }
 };

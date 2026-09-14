@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
+import { colors } from "../theme";
 
-export default function Dashboard({ goToPOS, goToPOSVisual, goToOrders, onLogout }) {
+export default function Dashboard({ goToPOS, goToPOSVisual, goToOrders, goToCustomers, goToSalesReport, goToProfitLoss, onLogout }) {
   const user = JSON.parse(localStorage.getItem("user") || "{}");
 
   const [stats, setStats] = useState({
@@ -52,7 +53,8 @@ await window.electron.invoke("sync-products", {
 async function handleSyncOrders() {
   setSyncingOrders(true);
   try {
-    await window.electron?.invoke("sync-orders"); 
+    const user = JSON.parse(localStorage.getItem("user") || "{}");
+    await window.electron?.invoke("sync-orders", { user_id: user.id });
     alert("✅ Orders synced");
   } catch (err) {
     alert("❌ Failed to sync orders");
@@ -85,41 +87,174 @@ async function handleSyncStock() {
   setSyncingStock(false);
 }
 
+const [syncingCustomers, setSyncingCustomers] = useState(false);
+
+async function handleSyncCustomers() {
+  setSyncingCustomers(true);
+  try {
+    const storeId = localStorage.getItem("store_id");
+    const user = JSON.parse(localStorage.getItem("user") || "{}");
+
+    const result = await window.electron.invoke("sync-customers", {
+      store_id: storeId,
+      user_id: user.id
+    });
+
+    if (result && result.success === false) {
+      alert(result.message || "❌ Failed to sync customers");
+    } else {
+      alert("✅ Customers & credits synced");
+    }
+  } catch (err) {
+    alert("❌ Failed to sync customers");
+  }
+  setSyncingCustomers(false);
+}
+
+const [syncingReturns, setSyncingReturns] = useState(false);
+
+async function handleSyncReturns() {
+  setSyncingReturns(true);
+  try {
+    const storeId = localStorage.getItem("store_id");
+    const user = JSON.parse(localStorage.getItem("user") || "{}");
+
+    const result = await window.electron.invoke("sync-returns", {
+      store_id: storeId,
+      user_id: user.id
+    });
+
+    if (result && result.success === false) {
+      alert(result.message || "❌ Failed to sync returns");
+    } else {
+      alert("✅ Returns synced");
+    }
+  } catch (err) {
+    alert("❌ Failed to sync returns");
+  }
+  setSyncingReturns(false);
+}
+
+const [syncingExpenses, setSyncingExpenses] = useState(false);
+
+async function handleSyncExpenses() {
+  setSyncingExpenses(true);
+  try {
+    const user = JSON.parse(localStorage.getItem("user") || "{}");
+
+    const result = await window.electron.invoke("sync-expenses", {
+      user_id: user.id
+    });
+
+    if (result && result.success === false) {
+      alert(result.message || "❌ Failed to sync expenses");
+    } else {
+      alert(`✅ ${result.count} expenses synced`);
+    }
+  } catch (err) {
+    alert("❌ Failed to sync expenses");
+  }
+  setSyncingExpenses(false);
+}
+
+const [syncingAll, setSyncingAll] = useState(false);
+
+async function handleSyncAll() {
+  setSyncingAll(true);
+
+  const storeId = localStorage.getItem("store_id");
+  const user = JSON.parse(localStorage.getItem("user") || "{}");
+
+  const steps = [
+    { label: "Products",  setter: setSyncingProducts,  channel: "sync-products",  args: { user_id: user.id } },
+    { label: "Orders",    setter: setSyncingOrders,    channel: "sync-orders",    args: { user_id: user.id } },
+    { label: "Stock",     setter: setSyncingStock,     channel: "sync-stock",     args: { user_id: user.id } },
+    { label: "Customers", setter: setSyncingCustomers, channel: "sync-customers", args: { store_id: storeId, user_id: user.id } },
+    { label: "Returns",   setter: setSyncingReturns,   channel: "sync-returns",   args: { store_id: storeId, user_id: user.id } },
+    { label: "Expenses",  setter: setSyncingExpenses,  channel: "sync-expenses",  args: { user_id: user.id } },
+  ];
+
+  const failures = [];
+
+  for (const step of steps) {
+    step.setter(true);
+    try {
+      const result = await window.electron.invoke(step.channel, step.args);
+      if (result && result.success === false) {
+        failures.push(`${step.label}: ${result.message || "failed"}`);
+      }
+    } catch (err) {
+      failures.push(`${step.label}: failed`);
+    }
+    step.setter(false);
+  }
+
+  if (failures.length === 0) {
+    alert("✅ Everything synced successfully");
+  } else {
+    alert(`⚠️ Synced with issues:\n${failures.join("\n")}`);
+  }
+
+  setSyncingAll(false);
+}
+
   return (
     <div style={styles.container}>
       
       {/* HEADER */}
       <div style={styles.header}>
         <div>
+          <p style={styles.eyebrow}>Zee POS</p>
           <h1 style={{ margin: 0 }}>Dashboard</h1>
-          <p style={{ color: "#666" }}>Welcome, {user?.name}</p>
+          <p style={{ color: colors.muted, margin: "4px 0 0" }}>Welcome, {user?.name}</p>
         </div>
 
-        <button onClick={handleLogout} style={styles.logoutBtn}>
+        <button className="pos-btn" onClick={handleLogout} style={styles.logoutBtn}>
           Logout
         </button>
       </div>
 
       {/* ACTION CARDS */}
       <div style={styles.actions}>
-        <div style={styles.actionCard} onClick={() => goToPOS()}>
-          <h2>🛒 Start Sales</h2>
-          <p>Create a new order</p>
+        <div className="pos-card" style={styles.actionCard} onClick={() => goToPOS()}>
+          <span style={styles.actionIcon}>🛒</span>
+          <h2 style={styles.actionTitle}>Start Sales</h2>
+          <p style={styles.actionText}>Create a new order</p>
         </div>
 
-        <div style={styles.actionCard} onClick={() => goToPOSVisual()}>
-          <h2>🛒 Start Sales Visual</h2>
-          <p>Create a new order</p>
+        <div className="pos-card" style={styles.actionCard} onClick={() => goToPOSVisual()}>
+          <span style={styles.actionIcon}>🛒</span>
+          <h2 style={styles.actionTitle}>Start Sales Visual</h2>
+          <p style={styles.actionText}>Create a new order</p>
         </div>
 
-        <div style={styles.actionCard} onClick={() => goToOrders()}>
-          <h2>📦 View Orders</h2>
-          <p>Manage previous orders</p>
+        <div className="pos-card" style={styles.actionCard} onClick={() => goToOrders()}>
+          <span style={styles.actionIcon}>📦</span>
+          <h2 style={styles.actionTitle}>View Orders</h2>
+          <p style={styles.actionText}>Manage previous orders</p>
+        </div>
+
+        <div className="pos-card" style={styles.actionCard} onClick={() => goToCustomers()}>
+          <span style={styles.actionIcon}>👥</span>
+          <h2 style={styles.actionTitle}>Customers & Credits</h2>
+          <p style={styles.actionText}>Track balances & payments</p>
+        </div>
+
+        <div className="pos-card" style={styles.actionCard} onClick={() => goToSalesReport()}>
+          <span style={styles.actionIcon}>📊</span>
+          <h2 style={styles.actionTitle}>Sales Report</h2>
+          <p style={styles.actionText}>Gross & net sales by period</p>
+        </div>
+
+        <div className="pos-card" style={styles.actionCard} onClick={() => goToProfitLoss()}>
+          <span style={styles.actionIcon}>📉</span>
+          <h2 style={styles.actionTitle}>Profit & Loss</h2>
+          <p style={styles.actionText}>Item cost & expenses by period</p>
         </div>
       </div>
 
       {/* STATS */}
-      <h2 style={{ marginTop: 30 }}>📊 Sales Overview</h2>
+      <h2 style={styles.sectionTitle}>📊 Sales Overview</h2>
 
       <div style={styles.grid}>
         <StatCard
@@ -148,31 +283,70 @@ async function handleSyncStock() {
       {/* 🔥 SYNC BAR */}
 <div style={styles.syncBar}>
   <button
+    className="pos-btn"
+    onClick={handleSyncAll}
+    style={styles.syncAllBtn}
+    disabled={syncingAll}
+  >
+    {syncingAll ? "Syncing Everything..." : "⚡ Sync Everything"}
+  </button>
+
+  <button
+    className="pos-btn"
     onClick={handleSyncProducts}
     style={styles.syncBtn}
-    disabled={syncingProducts}
+    disabled={syncingProducts || syncingAll}
   >
     {syncingProducts ? "Syncing..." : "🔄 Sync Products"}
   </button>
 
   <button
+    className="pos-btn"
     onClick={handleSyncOrders}
     style={styles.syncBtnSecondary}
-    disabled={syncingOrders}
+    disabled={syncingOrders || syncingAll}
   >
     {syncingOrders ? "Syncing..." : "📤 Sync Orders"}
   </button>
 
 
   <button
+    className="pos-btn"
     onClick={handleSyncStock}
     style={styles.syncBtnSecondary}
-    disabled={syncingStock}
+    disabled={syncingStock || syncingAll}
   >
     {syncingStock ? "Syncing..." : "📤 Sync Stock"}
   </button>
 
-  
+  <button
+    className="pos-btn"
+    onClick={handleSyncCustomers}
+    style={styles.syncBtnSecondary}
+    disabled={syncingCustomers || syncingAll}
+  >
+    {syncingCustomers ? "Syncing..." : "📤 Sync Customers"}
+  </button>
+
+  <button
+    className="pos-btn"
+    onClick={handleSyncReturns}
+    style={styles.syncBtnSecondary}
+    disabled={syncingReturns || syncingAll}
+  >
+    {syncingReturns ? "Syncing..." : "📤 Sync Returns"}
+  </button>
+
+  <button
+    className="pos-btn"
+    onClick={handleSyncExpenses}
+    style={styles.syncBtnSecondary}
+    disabled={syncingExpenses || syncingAll}
+  >
+    {syncingExpenses ? "Syncing..." : "📤 Sync Expenses"}
+  </button>
+
+
 </div>
     </div>
   );
@@ -181,7 +355,7 @@ async function handleSyncStock() {
 /* STAT CARD COMPONENT */
 function StatCard({ title, count, amount, units }) {
   return (
-    <div style={styles.statCard}>
+    <div className="pos-card" style={styles.statCard}>
       <p style={styles.statTitle}>{title}</p>
 
       <h3 style={{ margin: "5px 0" }}>Orders: {count}</h3>
@@ -196,10 +370,10 @@ function StatCard({ title, count, amount, units }) {
 /* STYLES */
 const styles = {
   container: {
-    padding: 20,
-    background: "#f5f6fa",
+    padding: "24px 24px 90px",
+    background: colors.background,
     minHeight: "100vh",
-    fontFamily: "Arial, sans-serif"
+    fontFamily: "inherit"
   },
 
   header: {
@@ -208,29 +382,69 @@ const styles = {
     alignItems: "center"
   },
 
+  eyebrow: {
+    margin: 0,
+    color: colors.primary,
+    fontSize: 12,
+    fontWeight: 700,
+    letterSpacing: 1,
+    textTransform: "uppercase"
+  },
+
   logoutBtn: {
-    background: "#ff4d4f",
+    background: colors.black,
     color: "#fff",
     border: "none",
-    padding: "10px 15px",
-    borderRadius: 6,
-    cursor: "pointer"
+    padding: "10px 18px",
+    borderRadius: 8,
+    cursor: "pointer",
+    fontWeight: 600
   },
 
   actions: {
     display: "flex",
-    gap: 20,
-    marginTop: 20
+    gap: 18,
+    marginTop: 24,
+    flexWrap: "wrap"
   },
 
   actionCard: {
-    flex: 1,
-    background: "#fff",
-    padding: 20,
-    borderRadius: 12,
+    flex: "1 1 200px",
+    background: colors.surface,
+    padding: 22,
+    borderRadius: 14,
     cursor: "pointer",
-    boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
-    transition: "0.2s",
+    boxShadow: colors.cardShadow,
+    borderTop: `3px solid ${colors.primary}`,
+  },
+
+  actionIcon: {
+    display: "inline-flex",
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    background: colors.primarySoft,
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 18,
+    marginBottom: 10,
+  },
+
+  actionTitle: {
+    margin: "0 0 4px",
+    fontSize: 16,
+    color: colors.black,
+  },
+
+  actionText: {
+    margin: 0,
+    fontSize: 13,
+    color: colors.muted,
+  },
+
+  sectionTitle: {
+    marginTop: 34,
+    color: colors.black,
   },
 
   grid: {
@@ -241,29 +455,31 @@ const styles = {
   },
 
   statCard: {
-    background: "#fff",
-    padding: 15,
-    borderRadius: 12,
-    boxShadow: "0 4px 12px rgba(0,0,0,0.08)"
+    background: colors.surface,
+    padding: 18,
+    borderRadius: 14,
+    boxShadow: colors.cardShadow
   },
 
   statTitle: {
     margin: 0,
-    color: "#888",
-    fontSize: 14
+    color: colors.muted,
+    fontSize: 13,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
 
   amount: {
     margin: 0,
-    color: "green",
+    color: colors.primary,
     fontWeight: "bold",
-    fontSize: 16
+    fontSize: 18
   },
 
   units: {
     margin: 0,
-    color: "#555",
-    fontSize: 14
+    color: colors.muted,
+    fontSize: 13
   },
 
   syncBar: {
@@ -271,29 +487,40 @@ const styles = {
     bottom: 0,
     left: 0,
     width: "100%",
-    background: "#fff",
-    padding: 12,
+    background: colors.black,
+    padding: 14,
     display: "flex",
     justifyContent: "center",
-    gap: 15,
-    boxShadow: "0 -2px 10px rgba(0,0,0,0.08)"
+    gap: 12,
+    flexWrap: "wrap",
+    boxShadow: "0 -4px 16px rgba(0,0,0,0.25)"
   },
-  
-  syncBtn: {
-    padding: "10px 20px",
-    background: "#1890ff",
+
+  syncAllBtn: {
+    padding: "10px 22px",
+    background: `linear-gradient(135deg, ${colors.primaryLight}, ${colors.primaryDark})`,
     color: "#fff",
     border: "none",
     borderRadius: 8,
     cursor: "pointer",
     fontWeight: "bold"
   },
-  
-  syncBtnSecondary: {
+
+  syncBtn: {
     padding: "10px 20px",
-    background: "#52c41a",
+    background: colors.primary,
     color: "#fff",
     border: "none",
+    borderRadius: 8,
+    cursor: "pointer",
+    fontWeight: "bold"
+  },
+
+  syncBtnSecondary: {
+    padding: "10px 20px",
+    background: colors.charcoal,
+    color: "#fff",
+    border: `1px solid ${colors.slate}`,
     borderRadius: 8,
     cursor: "pointer",
     fontWeight: "bold"
