@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { colors } from "../theme";
+import PasswordGate from "../components/PasswordGate";
 
 const PERIODS = [
   { key: "today", title: "Today" },
@@ -27,6 +28,7 @@ export default function SalesReport({ goBack }) {
   }
 
   return (
+    <PasswordGate onCancel={goBack}>
     <div style={styles.container}>
       <div style={styles.header}>
         <button className="pos-btn" onClick={goBack} style={styles.backBtn}>
@@ -105,6 +107,7 @@ export default function SalesReport({ goBack }) {
         </div>
       )}
     </div>
+    </PasswordGate>
   );
 }
 
