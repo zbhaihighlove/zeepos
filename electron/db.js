@@ -115,6 +115,10 @@ db.prepare(`
       db.prepare(`ALTER TABLE orders ADD COLUMN remote_id INTEGER`).run();
     } catch (e) {}
 
+    try {
+      db.prepare(`ALTER TABLE orders ADD COLUMN order_number TEXT`).run();
+    } catch (e) {}
+
 
 
 

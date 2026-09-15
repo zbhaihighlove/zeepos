@@ -4,6 +4,10 @@ import { colors } from "../theme";
 export default function Orders({ goBack, goToPOS, goToPOSVisual }) {
   const [orders, setOrders] = useState([]);
 
+  // ✅ Filters
+  const [filterOrderNumber, setFilterOrderNumber] = useState("");
+  const [filterDate, setFilterDate] = useState("");
+
   // ✅ Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
@@ -167,6 +171,7 @@ export default function Orders({ goBack, goToPOS, goToPOSVisual }) {
           <img src="${user?.avatar}" class="logo" />
           <h3>${user?.name}</h3>
           <div class="small">${new Date(order.created_at).toLocaleString()}</div>
+          ${order.order_number ? `<div class="small bold">Order #${order.order_number}</div>` : ""}
         </div>
 
         <div class="line"></div>
@@ -286,11 +291,31 @@ export default function Orders({ goBack, goToPOS, goToPOSVisual }) {
     return "#999";
   }
 
+  // ✅ Filtering — by order number (partial match) and/or exact date
+  const filteredOrders = orders.filter((order) => {
+    if (filterOrderNumber.trim()) {
+      const q = filterOrderNumber.trim().toLowerCase();
+      const orderNo = String(order.order_number || order.id || "").toLowerCase();
+      if (!orderNo.includes(q)) return false;
+    }
+    if (filterDate) {
+      const orderDate = (order.created_at || "").slice(0, 10);
+      if (orderDate !== filterDate) return false;
+    }
+    return true;
+  });
+
+  function clearFilters() {
+    setFilterOrderNumber("");
+    setFilterDate("");
+    setCurrentPage(1);
+  }
+
   // ✅ Pagination Logic
-  const totalPages = Math.ceil(orders.length / itemsPerPage);
+  const totalPages = Math.ceil(filteredOrders.length / itemsPerPage);
 
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const currentOrders = orders.slice(
+  const currentOrders = filteredOrders.slice(
     startIndex,
     startIndex + itemsPerPage
   );
@@ -311,10 +336,38 @@ export default function Orders({ goBack, goToPOS, goToPOSVisual }) {
         </button>
       </div>
 
+      {/* FILTERS */}
+      <div style={styles.filterBar}>
+        <input
+          type="text"
+          placeholder="Search by Order #"
+          value={filterOrderNumber}
+          onChange={(e) => {
+            setFilterOrderNumber(e.target.value);
+            setCurrentPage(1);
+          }}
+          style={styles.filterInput}
+        />
+        <input
+          type="date"
+          value={filterDate}
+          onChange={(e) => {
+            setFilterDate(e.target.value);
+            setCurrentPage(1);
+          }}
+          style={styles.filterInput}
+        />
+        {(filterOrderNumber || filterDate) && (
+          <button className="pos-btn" onClick={clearFilters} style={styles.clearBtn}>
+            Clear
+          </button>
+        )}
+      </div>
+
       {/* EMPTY */}
-      {orders.length === 0 && (
+      {filteredOrders.length === 0 && (
         <div style={styles.empty}>
-          <p>No orders found</p>
+          <p>{orders.length === 0 ? "No orders found" : "No orders match your filters"}</p>
         </div>
       )}
 
@@ -325,7 +378,7 @@ export default function Orders({ goBack, goToPOS, goToPOSVisual }) {
 
             {/* TOP */}
             <div style={styles.rowBetween}>
-              <h3 style={{ margin: 0 }}>Order #{order.id}</h3>
+              <h3 style={{ margin: 0 }}>Order #{order.order_number || order.id}</h3>
 
               <span
                 style={{
@@ -544,6 +597,33 @@ const styles = {
   newBtn: {
     padding: "10px 16px",
     background: colors.primary,
+    color: "#fff",
+    border: "none",
+    borderRadius: 8,
+    cursor: "pointer",
+    fontWeight: 600
+  },
+
+  filterBar: {
+    display: "flex",
+    gap: 10,
+    marginBottom: 20,
+    flexWrap: "wrap"
+  },
+
+  filterInput: {
+    padding: "10px 14px",
+    borderRadius: 8,
+    border: `1px solid ${colors.border}`,
+    fontSize: 14,
+    background: colors.surface,
+    color: colors.text,
+    minWidth: 200
+  },
+
+  clearBtn: {
+    padding: "10px 16px",
+    background: colors.black,
     color: "#fff",
     border: "none",
     borderRadius: 8,

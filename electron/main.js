@@ -88,6 +88,18 @@ function getPurchasePrice(sku) {
   return row?.purchase_price || 0;
 }
 
+// Human-facing receipt id, generated client-side (same scheme duplicated in mobile's
+// POSContext.js) so an order placed on either device gets the identical identifier
+// wherever it's printed or looked up — no server round-trip needed to assign it.
+function generateOrderNumber() {
+  const now = new Date();
+  const pad = (n, len = 2) => String(n).padStart(len, "0");
+  const datePart = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
+  const timePart = `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+  const rand = Math.random().toString(36).slice(2, 5).toUpperCase();
+  return `ORD-${datePart}-${timePart}-${rand}`;
+}
+
 // Pulls down any credit payment recorded elsewhere (mobile, or another desktop) that
 // this device doesn't already have — either because it's one WE pushed (matched via
 // local_id) or one already pulled down before (matched via remote_id).
@@ -162,8 +174,8 @@ async function pullDownOrders(userId) {
 
     const insertOrder = db.prepare(`
       INSERT INTO orders
-      (total, tax, discount, discount_percent, tax_percent, received, change_amount, customer_name, customer_phone, customer_id, status, created_at, remote_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'synced', ?, ?)
+      (total, tax, discount, discount_percent, tax_percent, received, change_amount, customer_name, customer_phone, customer_id, status, created_at, remote_id, order_number)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'synced', ?, ?, ?)
     `);
 
     const insertItem = db.prepare(`
@@ -197,12 +209,18 @@ async function pullDownOrders(userId) {
         ro.customer_phone || "",
         customerId,
         ro.created_at,
-        ro.id
+        ro.id,
+        ro.order_number || `ORD-${ro.id}`
       );
 
       const orderId = result.lastInsertRowid;
 
       for (const item of ro.items || []) {
+        // Prefer the cost the origin device actually snapshotted at sale time
+        // (now sent by mobile too); only fall back to today's local product cost
+        // for older synced orders that predate that fix (where it'll be 0).
+        const cost = item.purchase_price || getPurchasePrice(item.sku);
+
         insertItem.run(
           orderId,
           item.product_name,
@@ -212,7 +230,7 @@ async function pullDownOrders(userId) {
           item.discount_percent || 0,
           item.discount_fixed || 0,
           item.total,
-          getPurchasePrice(item.sku)
+          cost
         );
       }
 
@@ -356,11 +374,12 @@ ipcMain.handle("sync-products", async (event, data) => {
     }
 
     const customerId = findOrCreateCustomer(order.customer?.name, order.customer?.phone);
+    const orderNumber = generateOrderNumber();
 
     const insertOrder = db.prepare(`
       INSERT INTO orders
-      (total, tax, discount, discount_percent, tax_percent, received, change_amount, customer_name, customer_phone, customer_id, status, created_at, store_id, user_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', datetime('now'), ?, ?)
+      (total, tax, discount, discount_percent, tax_percent, received, change_amount, customer_name, customer_phone, customer_id, status, created_at, store_id, user_id, order_number)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', datetime('now'), ?, ?, ?)
     `);
 
     const insertItem = db.prepare(`
@@ -383,7 +402,8 @@ ipcMain.handle("sync-products", async (event, data) => {
         order.customer.phone,
         customerId,
         order.store_id, // ✅
-  order.user_id   // ✅
+  order.user_id,  // ✅
+        orderNumber
       );
 
       const orderId = result.lastInsertRowid;
@@ -415,7 +435,7 @@ ipcMain.handle("sync-products", async (event, data) => {
   
     transaction(order);
 
-    return { success: true };
+    return { success: true, order_number: orderNumber };
   });
 
 // returns

@@ -24,6 +24,7 @@ export default function POS({ goBack, editingOrder }) {
 
   const paymentRef = useRef(null);
   const skuRef = useRef(null);
+  const submitBtnRef = useRef(null);
 
   const [enterCount, setEnterCount] = useState(0);
 
@@ -61,15 +62,17 @@ export default function POS({ goBack, editingOrder }) {
     return () => clearTimeout(timer);
   }, [enterCount]);
 
+  const ctrlComboRef = useRef({ key: null, time: 0 });
+
   useEffect(() => {
     function handleKey(e) {
-  
+
       // 🔥 F2 → focus SKU
       if (e.key === "F2") {
         e.preventDefault();
         skuRef.current?.focus();
       }
-  
+
       // 🔥 F4 → submit / update order
       if (e.key === "F4") {
         e.preventDefault();
@@ -79,7 +82,31 @@ export default function POS({ goBack, editingOrder }) {
           submitOrder();
         }
       }
-  
+
+      // 🔥 Ctrl+P Ctrl+P → focus Collect Cash (received) input
+      if (e.ctrlKey && e.key.toLowerCase() === "p") {
+        const now = Date.now();
+        if (ctrlComboRef.current.key === "p" && now - ctrlComboRef.current.time < 1000) {
+          e.preventDefault();
+          paymentRef.current?.focus();
+          ctrlComboRef.current = { key: null, time: 0 };
+        } else {
+          ctrlComboRef.current = { key: "p", time: now };
+        }
+      }
+
+      // 🔥 Ctrl+S Ctrl+S → click the Submit/Update Order button directly
+      if (e.ctrlKey && e.key.toLowerCase() === "s") {
+        const now = Date.now();
+        if (ctrlComboRef.current.key === "s" && now - ctrlComboRef.current.time < 1000) {
+          e.preventDefault();
+          submitBtnRef.current?.click();
+          ctrlComboRef.current = { key: null, time: 0 };
+        } else {
+          ctrlComboRef.current = { key: "s", time: now };
+        }
+      }
+
       // 🔥 ESC → clear cart
       if (e.key === "Escape") {
         e.preventDefault();
@@ -580,9 +607,9 @@ const user = JSON.parse(localStorage.getItem("user") || "{}");
     }
 
     await loadProducts(); // ✅ refresh stock
-    const html = generateBillHTML(order, user);
+    const html = generateBillHTML({ ...order, order_number: result.order_number }, user);
     await window.electron.invoke("print-bill", html);
-  
+
     // 🔥 RESET EVERYTHING
     setCart([]);
     setReceived(0);
@@ -627,11 +654,11 @@ const user = JSON.parse(localStorage.getItem("user") || "{}");
     }
 
     await loadProducts(); // ✅ refresh stock
-  
+
     // 🔥 print updated bill
-    const html = generateBillHTML(order, user);
+    const html = generateBillHTML({ ...order, order_number: editingOrder.order_number }, user);
     await window.electron.invoke("print-bill", html);
-  
+
     // 🔥 clear + go back
     setCart([]);
     goBack("orders");
@@ -756,6 +783,7 @@ const user = JSON.parse(localStorage.getItem("user") || "{}");
           <img src="${user?.avatar}" class="logo" />
           <h3>${user?.name}</h3>
           <div class="small">${new Date().toLocaleString()}</div>
+          ${order.order_number ? `<div class="small bold">Order #${order.order_number}</div>` : ""}
         </div>
 
         <div class="line"></div>
@@ -919,6 +947,8 @@ const user = JSON.parse(localStorage.getItem("user") || "{}");
       <span style={styles.key}>F4</span> Submit
       <span style={styles.key}>ESC</span> Clear
       <span style={styles.key}>⏎×3</span> Pay
+      <span style={styles.key}>⌃P⌃P</span> Pay
+      <span style={styles.key}>⌃S⌃S</span> Submit
     </div>
   </div>
 </div>
@@ -969,9 +999,25 @@ const user = JSON.parse(localStorage.getItem("user") || "{}");
 </div>
 
 <div style={styles.colQty}>
-              <input type="number" value={item.qty}
-                onChange={(e) => updateQty(item.id, Number(e.target.value))}
-                style={styles.cellInput} />
+  <div style={styles.qtyStepper}>
+    <button
+      type="button"
+      style={styles.qtyBtn}
+      onClick={() => updateQty(item.id, Math.max(1, item.qty - 1))}
+    >
+      −
+    </button>
+    <input type="number" value={item.qty}
+      onChange={(e) => updateQty(item.id, Number(e.target.value))}
+      style={styles.qtyInput} />
+    <button
+      type="button"
+      style={styles.qtyBtn}
+      onClick={() => updateQty(item.id, item.qty + 1)}
+    >
+      +
+    </button>
+  </div>
 </div>
 <div style={styles.colStock}>
   {item.stock ?? 0}
@@ -1063,6 +1109,7 @@ const user = JSON.parse(localStorage.getItem("user") || "{}");
         </div>
 
         <button
+  ref={submitBtnRef}
   onClick={editingOrder ? saveOrder : submitOrder}
   style={styles.submitBtn}
 >
@@ -1178,9 +1225,40 @@ const styles = {
     textAlign: "center"
   },
 
+  /* QTY STEPPER */
+  qtyStepper: {
+    display: "flex",
+    alignItems: "center",
+    gap: 4
+  },
+  qtyBtn: {
+    width: 24,
+    height: 24,
+    flexShrink: 0,
+    borderRadius: 6,
+    border: `1px solid ${colors.border}`,
+    background: colors.surface,
+    color: colors.text,
+    cursor: "pointer",
+    fontSize: 16,
+    lineHeight: 1,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 0
+  },
+  qtyInput: {
+    width: 52,
+    padding: 6,
+    borderRadius: 6,
+    border: `1px solid ${colors.border}`,
+    textAlign: "center",
+    fontSize: 15
+  },
+
   /* COLUMNS */
   colItem: { flex: 3 },
-  colQty: { width: 70 },
+  colQty: { width: 116 },
   colStock: { width: 70, textAlign: "center", color: colors.muted },
   colRate: { width: 80, textAlign: "center" },
   colPercent: { width: 70 },
