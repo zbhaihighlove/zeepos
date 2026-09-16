@@ -3,6 +3,44 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const db = require('./db.cjs');
 
 const path = require('path');
+const https = require('https');
+const { URL } = require('url');
+
+// Electron 22 bundles Node 16, which has no global fetch (added in Node 18+).
+// This app only ever calls fetch(url, { method, headers, body }) and reads
+// res.json(), so a minimal polyfill over Node's built-in https module covers
+// every call site in this file without changing any of them.
+if (typeof global.fetch === 'undefined') {
+  global.fetch = function simpleFetch(url, options = {}) {
+    return new Promise((resolve, reject) => {
+      const u = new URL(url);
+      const req = https.request(
+        {
+          hostname: u.hostname,
+          path: u.pathname + u.search,
+          method: options.method || 'GET',
+          headers: options.headers || {},
+        },
+        (res) => {
+          let data = '';
+          res.setEncoding('utf8');
+          res.on('data', (chunk) => (data += chunk));
+          res.on('end', () => {
+            resolve({
+              ok: res.statusCode >= 200 && res.statusCode < 300,
+              status: res.statusCode,
+              json: async () => JSON.parse(data),
+              text: async () => data,
+            });
+          });
+        }
+      );
+      req.on('error', reject);
+      if (options.body) req.write(options.body);
+      req.end();
+    });
+  };
+}
 
 let mainWindow;
 
