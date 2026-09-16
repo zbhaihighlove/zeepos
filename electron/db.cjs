@@ -1,6 +1,6 @@
-import Database from 'better-sqlite3';
-import { app } from 'electron';
-import path from 'path';
+const Database = require('better-sqlite3');
+const { app } = require('electron');
+const path = require('path');
 
 const dbPath = path.join(app.getPath('userData'), 'pos.db');
 
@@ -233,4 +233,4 @@ db.prepare(`
 `).run();
 
 
-export default db;
+module.exports = db;

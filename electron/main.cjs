@@ -1,12 +1,8 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+const { app, BrowserWindow, ipcMain } = require('electron');
 
-import db from './db.js';
+const db = require('./db.cjs');
 
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const path = require('path');
 
 let mainWindow;
 
@@ -15,7 +11,7 @@ function createWindow() {
     width: 1200,
     height: 800,
     webPreferences: {
-      preload: path.resolve(__dirname, 'preload.js'),
+      preload: path.resolve(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
